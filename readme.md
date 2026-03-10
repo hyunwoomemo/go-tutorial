@@ -1,0 +1,456 @@
+# GO 튜토리얼
+
+## 다른 모듈에서 코드 호출
+
+```
+<홈>/
+ |-- hello/
+ |-- greetings/
+```
+
+```bash
+mkdir hello
+cd hello
+
+git mod init example.com/hello
+
+```
+
+```go
+package main
+
+import (
+    "fmt"
+
+    "example.com/greetings"
+)
+
+func main() {
+    // Get a greeting message and print it.
+    message := greetings.Hello("Gladys")
+    fmt.Println(message)
+}
+```
+
+```bash
+go mod edit -replace example.com/greetings=../greetings
+```
+
+```bash
+go mod tidy
+```
+
+## 오류를 반환하고 처리
+
+```go
+// greetings/greetings.go
+
+package greetings
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Hello returns a greeting for the named person
+func Hello(name string) (string, error) {
+
+	// If no name was given, return an error with a message.
+	if name == "" {
+		return "", errors.New("empty name")
+	}
+
+ 	// If a name was received, return a value that embeds the name
+  // in a greeting message.
+	message := fmt.Sprintf("Hi, %v. Welcome!", name)
+	return message, nil
+}
+```
+
+```go
+// hello/hello.go
+
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"example.com/greetings"
+)
+
+func main() {
+
+	log.SetPrefix("greetings: ")
+	log.SetFlags(0)
+
+	message, err := greetings.Hello("")
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(message)
+}
+```
+
+## 임의의 인사말을 보내세요
+
+```go
+// greetings/greetings.go
+
+package greetings
+
+import (
+    "errors"
+    "fmt"
+    "math/rand"
+)
+
+// Hello returns a greeting for the named person.
+func Hello(name string) (string, error) {
+    // If no name was given, return an error with a message.
+    if name == "" {
+        return name, errors.New("empty name")
+    }
+    // Create a message using a random format.
+    message := fmt.Sprintf(randomFormat(), name)
+    return message, nil
+}
+
+// randomFormat returns one of a set of greeting messages. The returned
+// message is selected at random.
+func randomFormat() string {
+    // A slice of message formats.
+    formats := []string{
+        "Hi, %v. Welcome!",
+        "Great to see you, %v!",
+        "Hail, %v! Well met!",
+    }
+
+    // Return a randomly selected message format by specifying
+    // a random index for the slice of formats.
+    return formats[rand.Intn(len(formats))]
+}
+```
+
+## 여러 사람에게 답례 인사
+
+```go
+// greetings/greetings.go
+
+func Hellos(names []string) (map[string]string, error) {
+	messages := make(map[string]string)
+
+	for _, name := range names {
+		message, err := Hello(name)
+		if err != nil {
+			return nil, err
+		}
+
+		messages[name] = message
+	}
+
+	return messages, nil
+}
+```
+
+```go
+// hello/hello.go
+
+	// A slice of names.
+	names := []string{"hyunwoo", "eunbi", "jian"}
+
+	// Request greeting messages for the names.
+	messages, err := greetings.Hellos(names)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(messages)
+
+	for _, message := range messages {
+		fmt.Println(message)
+	}
+```
+
+## 테스트
+
+```go
+package greetings
+
+import (
+	"regexp"
+	"testing"
+)
+
+// TestHelloName calls greetings.Hello with a name, checking
+// for a valid return value.
+func TestHelloName(t *testing.T) {
+	name := "Gladys"
+	want := regexp.MustCompile(`\b`+name+`\b`)
+	msg, err := Hello("Gladys")
+	if !want.MatchString(msg) || err != nil {
+		t.Errorf(`Hello("Gladys")) = %q, %v, want match for %#q, nil`, msg, err, want)
+	}
+}
+
+// TestHelloEmpty calls greetings.Hello with an empty string,
+// checking for an error.
+
+func TestHelloEmpty(t *testing.T) {
+	msg, err := Hello("")
+	if msg != "" || err == nil {
+		t.Errorf(`Hello("") = %q, %v, want "", error`, msg, err)
+	}
+}
+```
+
+> 테스트가 많아지면 함수가 너무 많아짐 그래서 `Table Driven Test` 사용
+
+```go
+func TestHello(t *testing.T) {
+
+	tests := []struct {
+		name string
+		wantErr bool
+	} {
+		{"Hyunwoo", false},
+		{"Eunbi", false},
+		{"", true},
+	}
+
+	for _, tt := range tests {
+
+		msg, err := Hello(tt.name)
+
+		if tt.wantErr {
+			if err == nil {
+				t.Errorf("Hello(%q) expected error", tt.name)
+			}
+
+			continue
+		}
+
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+
+		if !strings.Contains(msg, tt.name) {
+			t.Errorf("Hello(%q) = %q", tt.name, msg)
+		}
+	}
+}
+```
+
+## `naked` return
+
+```go
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+func lenAndUpper(name string)  (length int, uppercase string) {
+	defer fmt.Println("I'm done")
+
+	length = len(name)
+	uppercase = strings.ToUpper(name)
+	return
+
+}
+
+func main() {
+
+	totalLength, upperName := lenAndUpper("hyunwoo")
+
+	fmt.Println(totalLength, upperName)
+
+}
+```
+
+## defer
+
+> 함수가 끝난 후에 어떤 동작을 해주게 함
+
+```go
+func lenAndUpper(name string)  (length int, uppercase string) {
+	defer fmt.Println("I'm done")
+
+	length = len(name)
+	uppercase = strings.ToUpper(name)
+	return
+
+}
+```
+
+## range
+
+```go
+func superAdd(numbers ...int) int {
+
+	result := 0
+
+	for _, number := range numbers {
+		result += number
+	}
+
+	return result
+}
+
+superAdd(1, 2, 3, 4, 5, 6) // 21
+```
+
+## pointer
+
+`&` 메모리 주소
+
+`*` 탐색
+
+```go
+func main() {
+	a := 2
+	b := &a
+	a = 5
+
+	fmt.Println(*b) // 5
+
+  *b = 20
+
+  fmt.Pintln(a) // 20
+}
+```
+
+> 아주 무거운 object를 여러 곳에서 참조해야한다면 계속 복사본을 만들지 말고 이 개념을 사용하자 !!
+
+## slice
+
+```go
+func main() {
+
+	names := []string{"nico", "lynn", "dal", "hyunwoo", "eunbi"}
+	names = append(names, "jian")
+
+	fmt.Println(names)
+
+}
+```
+
+## map
+
+```go
+func main() {
+
+	nico := map[string]string{"name": "nico", "age": "12"}
+
+	for _, value := range nico {
+
+		fmt.Println(value)
+    // nico
+    // 12
+	}
+
+	fmt.Println(nico) // map[age:12 name:nico]
+}
+```
+
+## struct
+
+```go
+type person struct {
+	name string
+	age int
+	favFood []string
+}
+
+func main() {
+
+	favFood := []string{"kimchi", "ramen"}
+
+	nico := person{name:"nick", age:18, favFood: favFood}
+	fmt.Println(nico.name)
+}
+```
+
+## Account tutorial
+
+```go
+// main.go
+package main
+
+import (
+	"fmt"
+
+	"github.com/hyunwoomemo/learngo/accounts"
+)
+
+func main() {
+
+	account := accounts.NewAccount("hyunwoo")
+	account.Deposit(10)
+	err := account.Withdraw(20)
+
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	fmt.Println(account)
+}
+```
+
+```go
+// account.go
+package accounts
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Account struct
+type Account struct {
+	owner string
+	balance int
+}
+
+var noMoney = errors.New("Can't withdraw you are poor")
+
+// NewAccount account 만드는 함수
+func NewAccount(owner string) *Account {
+	account := Account{owner: owner, balance: 0}
+	return &account
+}
+
+// Deposit x amount on your account
+func (a *Account) Deposit(amount int) {
+	a.balance += amount
+}
+
+func (a Account) Balance() int {
+	return a.balance
+}
+
+func (a *Account) Withdraw(amount int) error {
+
+	if a.balance < amount {
+		return noMoney
+	}
+
+	a.balance -= amount
+	return nil
+}
+
+func (a *Account) ChangeOwner(newOwner string) {
+	a.owner = newOwner
+}
+
+func (a Account) Owner() string {
+	return a.owner
+}
+
+func (a Account) String() string {
+	return fmt.Sprint(a.Owner(), "'s account.\nHas: ", a.Balance())
+}
+```
