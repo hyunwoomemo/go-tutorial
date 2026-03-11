@@ -1,0 +1,58 @@
+// package main
+
+// import (
+// 	"fmt"
+// 	"net/http"
+// )
+
+// func main() {
+
+// 	results := make(map[string]string)
+
+// 	urls := []string{
+// "https://www.airbnb.com/",
+// "https://www.google.com/",
+// "https://www.amazon.com/",
+// "https://www.reddit.com/",
+// "https://www.google.com/",
+// "https://soundcloud.com/",
+// "https://www.facebook.com/",
+// "https://www.instagram.com/",
+// "https://academy.nomadcoders.co/",
+// }
+
+// 	for index, url := range urls {
+
+// 		result := "OK"
+// 		isLast := len(urls) -1 == index
+// 		var err error
+
+// 		if isLast {
+// 			err = hitURL(url)
+// 		} else {
+// 			err = go hitURL(url)
+// 		}
+
+// 		if err != nil {
+// 			result = "FAILED"
+// 		}
+
+// 		results[url] = result
+// 	}
+
+// 	fmt.Println(results)
+// }
+
+
+// func hitURL(url string) error {
+
+// 	resp, err := http.Get(url)
+
+// 	if err != nil {
+// 		fmt.Println(err, resp.StatusCode)
+// 	}
+
+
+// 	return err
+
+// }
