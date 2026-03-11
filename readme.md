@@ -454,3 +454,159 @@ func (a Account) String() string {
 	return fmt.Sprint(a.Owner(), "'s account.\nHas: ", a.Balance())
 }
 ```
+
+## Pointer Receiver VS Value Receiver
+
+**_값 변경 → pointer receiver_**
+
+```go
+func (a *Account) Deposit()
+func (a *Account) Withdraw()
+func (a *Account) ChangeOwner()
+```
+
+**_읽기만 → value receiver_**
+
+```go
+func (a Account) Balance()
+func (a Account) Owner()
+```
+
+> 그런데 Go에서는 `struct`면 대부분 `pointer receiver`로 통일
+>
+> - 1️⃣ 복사 비용 줄이기
+> - 2️⃣ 일관성 유지
+> - 3️⃣ method set 문제 방지
+
+```go
+func (a *Account) Balance() int {
+	return a.balance
+}
+```
+
+---
+
+## Stringer 인터페이스 구현
+
+`Go에서 매우 좋은 패턴`
+
+```go
+func (a Account) String() string {
+	return fmt.Sprint(a.Owner(), "'s account.\nHas: ", a.Balance())
+}
+
+fmt.Println(account)
+
+/// Hyunwoo's account
+/// Has: 100
+```
+
+---
+
+## Dictionary tutorial
+
+- 타입에 메소드 사용 가능
+
+#### Search Method
+
+```go
+// mydict.go
+package mydict
+
+import "errors"
+
+type Dictionary map[string]string
+
+var errNotFound =  errors.New("Not Found")
+
+func (d Dictionary) Search(word string) (string, error) {
+
+	value, exists := d[word]
+
+	if exists {
+		return value, nil
+	}
+
+	return "", errNotFound
+
+}
+```
+
+```go
+// main.go
+package main
+
+import (
+	"fmt"
+
+	mydict "github.com/hyunwoomemo/dict/dict"
+)
+
+func main() {
+	dictionary := mydict.Dictionary{"first": "First word"}
+
+	dictionary["hello"] = "hello"
+	definition, err := dictionary.Search("first")
+
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(definition)
+	}
+}
+```
+
+#### Add Method
+
+```go
+func (d Dictionary) Add(word, def string) error {
+
+	_, err := d.Search(word)
+
+	switch err {
+	case errNotFound:
+		d[word] = def
+	case nil:
+		return errWordExists
+	}
+
+	return nil
+}
+```
+
+#### Update & Delete Method
+
+```go
+
+var errNotExists = errors.New("단어가 존재하지 않습니다.")
+
+// ...
+
+func (d Dictionary) Update(word, def string) error {
+
+	_, err := d.Search(word)
+
+	switch err {
+	case errWordExists:
+		return errNotExists
+	case nil:
+		d[word] = def
+	}
+
+	return nil
+}
+
+func (d Dictionary) Delete(word string) error {
+
+	_, err := d.Search(word)
+
+	switch err {
+	case errNotFound:
+		return errNotExists
+	case nil:
+		delete(d, word)
+	}
+
+	return nil
+}
+```
