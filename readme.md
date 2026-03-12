@@ -748,3 +748,230 @@ func hitURL(url string, c chan<- requestResult) {
 	c <-requestResult{URL: url, StatusCode: resp.StatusCode, Success: success}
 }
 ```
+
+## Scrapper
+
+```go
+package main
+
+import (
+	"encoding/csv"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/PuerkitoBio/goquery"
+)
+
+type extractedJob struct {
+	id string
+	title string
+	location string
+	date string
+	condition []string
+}
+
+var baseURL string = "https://www.saramin.co.kr/zf_user/search/recruit?&searchword=python"
+
+func main() {
+	c := make(chan []extractedJob)
+	var jobs []extractedJob
+	pages := getPages()
+
+	fmt.Println(pages)
+
+	for i:=0;i<pages;i++ {
+		go getPage(i, c)
+	}
+
+	for i:=0;i<pages;i++ {
+		result := <-c
+		jobs = append(jobs, result...)
+	}
+
+	writeJobs(jobs)
+}
+
+func writeJobs(jobs []extractedJob) {
+	file, err := os.Create("jobs.csv")
+	checkError(err)
+
+	w := csv.NewWriter(file)
+
+	defer w.Flush()
+
+	headers := []string{"ID", "TITLE", "LOCATION", "DATE", "CONDITION"}
+
+	wErr := w.Write(headers)
+
+	for _, job := range jobs {
+
+		jobSlice := []string{job.id, job.title, job.location, job.date, strings.Join(job.condition, " | ")}
+		jwErr := w.Write(jobSlice)
+		checkError(jwErr)
+
+	}
+	checkError(wErr)
+
+}
+
+func getPage(page int, c chan []extractedJob) {
+	var jobs []extractedJob
+	pageURL := baseURL + "&recruitPage=" + strconv.Itoa(page)
+
+	res, err := http.Get(pageURL)
+
+	checkError(err)
+	checkCode(res)
+
+	defer res.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	checkError(err)
+
+		doc.Find(".content").Each(func (i int, s *goquery.Selection) {
+
+			s.Find(".item_recruit").Each(func (i int, card *goquery.Selection) {
+
+				job := extractJob(card)
+				jobs = append(jobs, job)
+			})
+
+	})
+
+	c <- jobs
+}
+
+func getPages() int  {
+	pages := 0
+	res, err := http.Get(baseURL)
+	checkError(err)
+	checkCode(res)
+
+	defer res.Body.Close()
+
+	doc, err := goquery.NewDocumentFromReader(res.Body)
+	checkError(err)
+
+	doc.Find(".pagination").Each(func (i int, s *goquery.Selection) {
+		pages = s.Find("a").Length()
+	})
+
+	return pages
+}
+
+func checkError(err error)  {
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func checkCode(res *http.Response) {
+	if res.StatusCode != 200 {
+		log.Fatalln("Request failed with Status:", res.StatusCode)
+	}
+}
+
+func extractJob(card *goquery.Selection) extractedJob {
+		id, _ := card.Attr("value")
+				title := cleanString(card.Find(".area_job > .job_tit").Text())
+				location := card.Find(".area_job > .job_condition > span").First().Text()
+
+				date := card.Find(".job_date > .date").Text()
+
+				var conditions []string
+				card.Find(".area_job > .job_condition > span").Each(func(i int, s *goquery.Selection) {
+					if i > 0 {
+						conditions = append(conditions, s.Text())
+					}
+				})
+				// fmt.Println(id, exist, title,location,date, conditions)
+				return extractedJob{id: id, title: title, location: location, date: date, condition: conditions}
+
+}
+
+func cleanString(str string) string {
+	return strings.TrimSpace(str)
+}
+```
+
+`strings.Join`
+
+> []string 을 "a | b | c"로 변환
+
+```go
+// job.condition []string
+strings.Join(job.condition, " | ")
+```
+
+`strings.TrimSpace(str)`
+
+> 앞 뒤 공백 제거
+
+## Echo
+
+검색창에 직무 검색하면 검색 결과 csv파일 다운로드
+
+```go
+package main
+
+import (
+	"os"
+	"strings"
+
+	"github.com/hyunwoomemo/scrapper/scrapper"
+	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
+)
+
+const fileName string = "jobs.csv"
+
+func handleHome(c *echo.Context) error {
+			return c.File("home.html")
+}
+
+func handleScrape(c *echo.Context) error {
+	defer os.Remove(fileName)
+	term := strings.ToLower(scrapper.CleanString(c.FormValue("term")))
+	scrapper.Scrape(term)
+
+	return c.Attachment(fileName, fileName)
+}
+
+func main() {
+	// scrapper.Scrape("go")
+
+	e := echo.New()
+	e.Use(middleware.RequestLogger())
+
+	e.GET("/", handleHome)
+	e.POST("/scrape", handleScrape)
+
+	if err := e.Start(":1323"); err != nil {
+		e.Logger.Error("failed to start server", "error", err)
+	}
+}
+```
+
+```html
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Go Jobs</title>
+  </head>
+  <body>
+    <h1>Go Jobs</h1>
+    <h3>Saramin.com scrapper</h3>
+
+    <form method="post" action="/scrape">
+      <input type="text" placeholder="키워드를 입력하세요." name="term" />
+      <button>Search</button>
+    </form>
+  </body>
+</html>
+```
